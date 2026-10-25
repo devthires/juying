@@ -29,6 +29,8 @@ export interface CacheSettings {
   maxBytesPerEpisode: number;
   /** 全局缓存上限（字节） */
   maxTotalBytes: number;
+  /** 省流模式：预取窗口封顶 120s，暂停不再铺满整集；画质不变，只砍预取浪费 */
+  dataSaver: boolean;
 }
 
 export const DEFAULT_CACHE_SETTINGS: CacheSettings = {
@@ -36,6 +38,7 @@ export const DEFAULT_CACHE_SETTINGS: CacheSettings = {
   horizonSeconds: 300,
   maxBytesPerEpisode: 800 * 1024 * 1024,
   maxTotalBytes: 2 * 1024 * 1024 * 1024,
+  dataSaver: true,
 };
 
 const SETTINGS_KEY = 'libretv-video-cache-settings';
@@ -52,6 +55,7 @@ export function normalizeCacheSettings(input: unknown): CacheSettings {
     horizonSeconds: raw.horizonSeconds === 0 ? 0 : clamp(raw.horizonSeconds ?? DEFAULT_CACHE_SETTINGS.horizonSeconds, 60, 7200),
     maxBytesPerEpisode: clamp(raw.maxBytesPerEpisode ?? DEFAULT_CACHE_SETTINGS.maxBytesPerEpisode, 50 * 1024 * 1024, 8 * 1024 * 1024 * 1024),
     maxTotalBytes: clamp(raw.maxTotalBytes ?? DEFAULT_CACHE_SETTINGS.maxTotalBytes, 100 * 1024 * 1024, 20 * 1024 * 1024 * 1024),
+    dataSaver: raw.dataSaver !== false,
   };
 }
 

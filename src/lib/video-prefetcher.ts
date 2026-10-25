@@ -120,7 +120,12 @@ export class VideoPrefetcher {
       this.setState({ state: 'disabled', cached: 0, total: 0, bytes: 0 });
       return;
     }
-    const horizon = options.horizonSeconds ?? settings.horizonSeconds;
+    // 省流模式：窗口封顶 120s，并忽略暂停「无限铺满」的显式覆盖（horizonSeconds = 0）。
+    // 画质不受影响——只砍「下了却没看到」的预取浪费；60s 下限保证起播与拖动的顺滑。
+    const rawHorizon = options.horizonSeconds ?? settings.horizonSeconds;
+    const horizon = settings.dataSaver
+      ? Math.max(60, Math.min(rawHorizon === 0 ? 120 : rawHorizon, 120))
+      : rawHorizon;
     const descriptor: RunDescriptor = { m3u8Url: options.m3u8Url, episodeKey: options.episodeKey, horizonSeconds: horizon };
 
     // 幂等判断：先确认是同一个运行（同集、同清单、同窗口长度），再看窗口罩不罩得住新锚点。

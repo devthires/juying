@@ -721,10 +721,10 @@ export function PlayerShell({
     art.on('video:pause', () => {
       // 跳过片尾会主动 pause：此时已按「看完」处理，不能再把片尾位置写回进度
       if (!endedRef.current) propsRef.current.onPause?.(art.currentTime, art.duration);
-      // 暂停 = 预取黄金窗口：解除限速并无限铺满整集（用户主动行为，带宽占用可接受）
+      // 暂停 = 预取黄金窗口：解除限速。省流模式只维持常规窗口，否则解除封顶无限铺满整集
       // waiting 触发的限速在此解除，否则黄金窗口会被 500ms 轮询冻结
       getVideoPrefetcher().setThrottled(false);
-      ensurePrefetch(currentMediaUrlRef.current, art.currentTime, 0);
+      ensurePrefetch(currentMediaUrlRef.current, art.currentTime, loadCacheSettings().dataSaver ? undefined : 0);
     });
     art.on('video:waiting', () => {
       // 卡顿：预取临时让出带宽给播放

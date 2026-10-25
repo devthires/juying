@@ -620,6 +620,7 @@ function PlaybackPanel() {
 /** 片段缓存：开启/关闭 + 用量展示 + 清理（数据在浏览器本地，独立于配置导出） */
 function VideoCachePanel() {
   const [enabled, setEnabled] = useState(() => loadCacheSettings().enabled);
+  const [dataSaver, setDataSaver] = useState(() => loadCacheSettings().dataSaver);
   const [summary, setSummary] = useState<CacheSummary>({ segments: 0, bytes: 0, episodes: 0 });
   const [clearing, setClearing] = useState(false);
 
@@ -646,6 +647,15 @@ function VideoCachePanel() {
         onChange={(v) => {
           const next = saveCacheSettings({ enabled: v });
           setEnabled(next.enabled);
+        }}
+      />
+      <ToggleRow
+        label="省流模式"
+        description="移动流量/热点场景开启：预取窗口缩短到 2 分钟，暂停不再预载整集，退出播放时浪费的预取流量大幅减少。画质完全不变，仅影响拖动预载距离。Wi-Fi 环境可关闭以获得更远的即时拖动范围"
+        checked={dataSaver}
+        onChange={(v) => {
+          const next = saveCacheSettings({ dataSaver: v });
+          setDataSaver(next.dataSaver);
         }}
       />
       <div className="flex items-center justify-between text-xs text-faint">
