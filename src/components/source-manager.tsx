@@ -878,7 +878,7 @@ function SourceSubscriptions() {
 
     setPublishing(true);
     try {
-      const result = await api.publishSourceList({ name: 'LibreTV-SourceList', sources, liveSources });
+      const result = await api.publishSourceList({ name: 'JuYing-SourceList', sources, liveSources });
       setPublished(result);
       toast(`已发布 ${result.sources} 个点播源、${result.liveSources} 个直播源到 ${result.provider}`, 'success');
     } catch (err) {
@@ -917,12 +917,12 @@ function SourceSubscriptions() {
       })
       .map(({ name, url, epg }) => ({ name: name || hostnameOf(url), url, epg }));
 
-    const payload = { name: 'LibreTV-SourceList', version: 2, exportedAt: Date.now(), sources, liveSources };
+    const payload = { name: 'JuYing-SourceList', version: 2, exportedAt: Date.now(), sources, liveSources };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `LibreTV-SourceList_${Date.now()}.json`;
+    a.download = `JuYing-SourceList_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     toast(`已导出 ${sources.length} 个点播源、${liveSources.length} 个直播源，托管后即可被他人订阅`, 'success');
@@ -1179,7 +1179,7 @@ function ConfigIoPanel() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `LibreTV-Settings_${Date.now()}.json`;
+      a.download = `JuYing-Settings_${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
       toast('配置已导出', 'success');
@@ -1253,7 +1253,8 @@ function summarizeConfig(text: string): string {
   } catch {
     throw new Error('文件不是合法的 JSON');
   }
-  if (cfg.name !== 'LibreTV-Settings') throw new Error('不是 LibreTV 的配置文件');
+  if (cfg.name !== 'JuYing-Settings' && cfg.name !== 'LibreTV-Settings')
+    throw new Error('不是聚影的配置文件（旧版 LibreTV 导出的配置也可导入）');
 
   const parts: string[] = [];
   const settingsRaw = cfg.data?.[PERSIST_KEY];

@@ -27,7 +27,7 @@ const PRESET_LIVE_SOURCES = JSON.stringify([
 let serverProc = null;
 let mainWindow = null;
 
-/** 随机取一个空闲本地端口，避免与已开服务冲突 */
+/** 随机取一个空闲本地端口（pickPort 的最后兜底） */
 function getFreePort() {
   return new Promise((resolve, reject) => {
     const srv = net.createServer();
@@ -39,14 +39,46 @@ function getFreePort() {
   });
 }
 
+/** 探测端口是否空闲 */
+function isPortFree(port) {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once('error', () => resolve(false));
+    srv.listen(port, '127.0.0.1', () => srv.close(() => resolve(true)));
+  });
+}
+
+/**
+ * 端口必须跨启动稳定：页面数据（IndexedDB / localStorage）按 origin（含端口）隔离，
+ * 端口一变历史记录、搜索记录和设置就会整体「消失」。优先沿用上次使用的端口，
+ * 被其他程序占用时向后顺延并记住新端口；顺延也失败才退回随机端口。
+ */
+async function pickPort(preferred) {
+  for (let port = preferred; port < preferred + 100; port += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    if (await isPortFree(port)) return port;
+  }
+  return getFreePort();
+}
+
 /** 可选的用户配置：%APPDATA%/聚影/config.json，目前支持 password 字段 */
 function readConfig() {
-  const defaults = { password: '123456' };
+  const defaults = { password: '123456', port: 27182 };
   try {
     const p = path.join(app.getPath('userData'), 'config.json');
     return { ...defaults, ...JSON.parse(fs.readFileSync(p, 'utf8')) };
   } catch {
     return defaults;
+  }
+}
+
+/** 把端口等变更写回用户配置，供下次启动沿用 */
+function writeConfig(patch) {
+  try {
+    const p = path.join(app.getPath('userData'), 'config.json');
+    fs.writeFileSync(p, JSON.stringify({ ...readConfig(), ...patch }, null, 2));
+  } catch {
+    // 写不进配置只影响下次端口偏好，不阻断启动
   }
 }
 
@@ -107,7 +139,9 @@ function waitForServer(port, timeoutMs = 60000) {
 }
 
 async function createWindow() {
-  const port = await getFreePort();
+  const preferred = Number.isFinite(readConfig().port) ? readConfig().port : 27182;
+  const port = await pickPort(preferred);
+  if (port !== preferred) writeConfig({ port });
   startServer(port);
   await waitForServer(port);
 
