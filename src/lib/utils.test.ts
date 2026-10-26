@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildImageCandidates, buildImageUrl } from './utils';
+import { buildImageCandidates, buildImageUrl, matchesFuzzy } from './utils';
 
 describe('buildImageUrl', () => {
   it('proxy 模式走查询串形式（路径形式会被 EdgeOne 等网关归一化破坏）', () => {
@@ -61,5 +61,22 @@ describe('buildImageCandidates', () => {
   it('custom 模式为单一候选（模板错误显式暴露，不静默回退）', () => {
     expect(buildImageCandidates(DOUBAN, 'custom', 'https://p.example.com/?u=')).toHaveLength(1);
     expect(buildImageCandidates(undefined, 'direct', '')).toEqual([]);
+  });
+});
+
+describe('matchesFuzzy', () => {
+  it('按顺序包含全部字符即命中（允许跳字）', () => {
+    expect(matchesFuzzy('流浪的地球', '流地')).toBe(true);
+    expect(matchesFuzzy('流浪地球', '流地')).toBe(true);
+    expect(matchesFuzzy('流星的球', '流地')).toBe(false);
+  });
+
+  it('单字符与含数字的关键词不启用', () => {
+    expect(matchesFuzzy('流浪地球', '流')).toBe(false);
+    expect(matchesFuzzy('钢铁侠12008', '钢铁侠2008')).toBe(false);
+  });
+
+  it('关键词比标题长时不命中', () => {
+    expect(matchesFuzzy('流浪', '流浪地球')).toBe(false);
   });
 });

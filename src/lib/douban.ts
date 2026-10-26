@@ -86,3 +86,59 @@ export async function fetchDoubanRecommend(
   setCache(cacheKey, items, CACHE_TTL);
   return items;
 }
+
+/**
+ * 搜索框联想：用豆瓣自家搜索框的 subject_suggest 接口（movie.douban.com/j/subject_suggest）。
+ * 输入即返回片名匹配候选（海报 + 年份 + 电影/剧集类型），返回序即豆瓣热度序，
+ * 正好满足「输入时下拉出模糊匹配的影片、热度高的在前」。
+ * 注意不能用 search_subjects 的 tag 传关键词：那会被当成分类标签推荐（实测返回无关影片）。
+ */
+interface DoubanRawSuggest {
+  id: string;
+  title: string;
+  img: string;
+  /** 集数：有值即为剧集。实测 type 字段对剧集也常标 movie，不可信 */
+  episode?: string;
+  year?: string;
+}
+
+export async function fetchDoubanSuggest(wd: string): Promise<DoubanItem[]> {
+  const keyword = wd.trim().slice(0, 50);
+  if (!keyword) return [];
+
+  const cacheKey = `douban:suggest:${keyword}`;
+  const cached = getCache<DoubanItem[]>(cacheKey);
+  if (cached) return cached;
+
+  let raw: DoubanRawSuggest[] | undefined;
+  try {
+    const res = await fetchUpstream(
+      `https://movie.douban.com/j/subject_suggest?q=${encodeURIComponent(keyword)}`,
+      {
+        timeoutMs: 6000,
+        headers: { 'User-Agent': UA, Referer: 'https://movie.douban.com/', Accept: 'application/json' },
+      }
+    );
+    if (res.ok) raw = (await res.json()) as DoubanRawSuggest[];
+  } catch {
+    // 联想是增强功能，失败静默降级为空列表
+  }
+
+  const seen = new Set<string>();
+  const items = (raw ?? [])
+    .filter((s) => {
+      if (!s.title || !s.id || seen.has(s.title)) return false;
+      seen.add(s.title);
+      return true;
+    })
+    .map((s) => ({
+      id: s.id,
+      title: s.title,
+      cover: s.img,
+      isTv: Boolean(s.episode),
+      year: s.year || undefined,
+    }));
+
+  setCache(cacheKey, items, CACHE_TTL);
+  return items;
+}

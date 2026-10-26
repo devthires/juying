@@ -95,6 +95,7 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
                 {searchHistory.visible && (
                   <SearchHistoryDropdown
                     id="header-search-history"
+                    suggestions={searchHistory.suggestions}
                     matches={searchHistory.matches}
                     activeIndex={searchHistory.activeIndex}
                     onPick={pickHistory}

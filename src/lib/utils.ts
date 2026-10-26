@@ -2,6 +2,25 @@ export function cn(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ');
 }
 
+/**
+ * 模糊匹配：text 按顺序包含 keyword 的全部字符（允许中间跳字）即算命中。
+ * 用于搜索场景的兜底——连续子串（includes）匹配不到时，搜「流地球」
+ * 仍能命中「流浪地球」这类插字标题。
+ * 含数字的关键词不启用：跳字会把「边缘行者12」误判成「边缘行者2」、
+ * 「钢铁侠12008」当成「钢铁侠2008」，季数/年份必须精确连续命中。
+ * 单字符关键词同样不启用（几乎条条命中）。
+ */
+export function matchesFuzzy(text: string, keyword: string): boolean {
+  if (keyword.length < 2 || /\d/.test(keyword)) return false;
+  if (keyword.length > text.length) return false;
+  let index = 0;
+  for (const ch of text) {
+    if (ch === keyword[index]) index += 1;
+    if (index === keyword.length) return true;
+  }
+  return false;
+}
+
 export function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '00:00';
   const h = Math.floor(seconds / 3600);

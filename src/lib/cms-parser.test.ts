@@ -179,6 +179,19 @@ describe('isRelevant', () => {
     expect(isRelevant('钢铁侠 Iron Man 2008', '钢铁侠 2008')).toBe(true);
   });
 
+  it('连续子串未命中时按子序列模糊兜底', () => {
+    // 标题插字（「流浪的地球」）：连续子串匹配不到，子序列仍命中
+    expect(isRelevant('流浪的地球 完整版', '流浪地球')).toBe(true);
+    // 字符顺序颠倒的不命中
+    expect(isRelevant('球流的地球 完整版', '流浪地球')).toBe(false);
+    // 单字符查询不启用模糊（但仍按普通子串匹配）
+    expect(isRelevant('爸爸去哪儿', '爸')).toBe(true);
+  });
+
+  it('含数字的查询不做模糊兜底（季数/年份必须精确命中）', () => {
+    expect(isRelevant('流浪地球 12007', '流浪地球 2008')).toBe(false);
+  });
+
   it.each([
     ['赛博朋克：边缘行者第二季', '赛博朋克：边缘行者 2'],
     ['赛博朋克：边缘行者 2', '赛博朋克：边缘行者第二季'],

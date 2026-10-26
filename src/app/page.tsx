@@ -266,10 +266,11 @@ function HomeContent() {
               </div>
             </form>
 
-            {/* 最近搜索：与输入框无缝拼接；浮层不占文档流，出现/消失不会顶动下方内容 */}
+            {/* 搜索联想 + 最近搜索：与输入框无缝拼接；浮层不占文档流，出现/消失不会顶动下方内容 */}
             {searchHistory.visible && (
               <SearchHistoryDropdown
                 id="home-search-history"
+                suggestions={searchHistory.suggestions}
                 matches={searchHistory.matches}
                 activeIndex={searchHistory.activeIndex}
                 onPick={pickHistory}

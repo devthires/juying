@@ -201,6 +201,10 @@ export const api = {
     return request<DoubanResponse>(`/api/douban?${sp.toString()}`, { signal });
   },
 
+  /** 搜索框联想：关键词 → 豆瓣热度序影片候选 */
+  doubanSuggest: (q: string, signal?: AbortSignal) =>
+    request<DoubanResponse>(`/api/douban/suggest?q=${encodeURIComponent(q)}`, { signal }),
+
   /** Bangumi 每日放送（免 key），首页推荐的另一数据源 */
   bangumiCalendar: (signal?: AbortSignal) => request<BangumiCalendarResponse>('/api/bangumi/calendar', { signal }),
 

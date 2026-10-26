@@ -51,6 +51,8 @@ export interface DoubanItem {
   cover: string;
   rating?: string;
   isTv?: boolean;
+  /** 联想候选的上映/开播年份（仅 subject_suggest 联想接口返回） */
+  year?: string;
 }
 
 export interface SourceSearchOutcome {

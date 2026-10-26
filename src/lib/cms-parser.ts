@@ -1,3 +1,4 @@
+import { matchesFuzzy } from './utils';
 import type { SearchResultItem, VideoDetail } from './types';
 
 /**
@@ -247,9 +248,13 @@ function prepareQuery(wd: string): PreparedQuery | undefined {
   };
 }
 
+/**
+ * 连续子串（含整词与分词）都未命中时，退回子序列模糊匹配兜底。
+ */
 function matchesPrepared(nName: string, query: PreparedQuery): boolean {
   if (includesKeyword(nName, query.normalized)) return true;
-  return query.tokens.length > 1 && query.tokens.every((token) => includesKeyword(nName, token));
+  if (query.tokens.length > 1 && query.tokens.every((token) => includesKeyword(nName, token))) return true;
+  return matchesFuzzy(nName, query.normalized);
 }
 
 function isRelevantPrepared(name: string, query: PreparedQuery): boolean {
@@ -270,6 +275,7 @@ function isRelevantPrepared(name: string, query: PreparedQuery): boolean {
  * 忽略标点和大小写，多词查询要求每个词都命中。
  * 独立的末尾数字也可匹配明确的中文季数后缀；
  * 标题内部的数字与四位年份不作为季数别名。
+ * 整词/分词均未命中时再按子序列模糊兜底（matchesFuzzy）。
  */
 export function isRelevant(name: string, wd: string): boolean {
   const query = prepareQuery(wd);
