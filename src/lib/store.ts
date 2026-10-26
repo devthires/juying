@@ -332,7 +332,7 @@ export const useAppStore = create<AppState>()(
       yellowFilter: true,
       adFilter: true,
       doubanEnabled: true,
-      recommendSource: 'hot-list',
+      recommendSource: 'douban',
       recommendSourceTouched: false,
       autoplayNext: true,
       skipMarks: {},
