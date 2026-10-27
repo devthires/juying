@@ -281,3 +281,110 @@ describe('runDownloadJob · 源站缺片与存储错误', () => {
     );
   });
 });
+
+describe('runDownloadJob · 写出阶段容错', () => {
+  it('缓存被驱逐（写出阶段 match 不到）时回源补拉而非判死整集', async () => {
+    // put 全部丢弃：模拟存储压力下 Cache Storage 驱逐——下载阶段看似正常推进，
+    // 写出阶段读不到任何分片。旧行为直接抛「分片 1 缓存丢失」判死已下完的任务
+    stubCaches(async () => {});
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('index.m3u8')) return new Response(PLAYLIST, { status: 200 });
+      return new Response(new Uint8Array([0x47]), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const written: number[] = [];
+
+    await runDownloadJob(
+      jobOptions({
+        target: {
+          kind: 'memory',
+          write: async (d) => void written.push(d.byteLength),
+          close: async () => {},
+          abort: async () => {},
+        },
+      })
+    );
+
+    expect(written).toHaveLength(3);
+    // 每个分片被取两次：下载阶段一次 + 写出阶段缓存丢失回源补拉一次
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('.ts'))).toHaveLength(6);
+  });
+
+  it('缓存内容损坏（解密失败）时回源重拉，重拉正常则任务完成', async () => {
+    const store = new Map<string, ArrayBuffer>();
+    const cache = {
+      match: async (req: Request) => {
+        const hit = store.get(req.url);
+        return hit ? new Response(hit.slice(0)) : undefined;
+      },
+      // 存进去的是垃圾数据：模拟分片写缓存后损坏 / 被截断
+      put: async (req: Request) => {
+        store.set(req.url, new ArrayBuffer(16));
+      },
+      keys: async () => [...store.keys()].map((u) => new Request(u)),
+      delete: async (req: Request) => store.delete(req.url),
+    };
+    vi.stubGlobal('caches', { open: async () => cache });
+    const iv = new Uint8Array(16).fill(0xab);
+    const cipher = await encryptForIv(PLAINTEXT, iv);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('index.m3u8')) {
+          return new Response(
+            ['#EXTM3U', '#EXT-X-KEY:METHOD=AES-128,URI="key.bin",IV=0x' + 'ab'.repeat(16), '#EXTINF:4,', 's0.ts', '#EXT-X-ENDLIST'].join('\n'),
+            { status: 200 }
+          );
+        }
+        if (url.endsWith('key.bin')) return new Response(KEY.slice(0), { status: 200 });
+        return new Response(cipher.slice(0), { status: 200 });
+      })
+    );
+    const written: number[] = [];
+
+    await runDownloadJob(
+      jobOptions({
+        format: 'TS',
+        target: {
+          kind: 'memory',
+          write: async (d) => void written.push(d.byteLength),
+          close: async () => {},
+          abort: async () => {},
+        },
+      })
+    );
+
+    expect(written).toHaveLength(1);
+    expect(written[0]).toBe(PLAINTEXT.byteLength);
+  });
+
+  it('分片写出成功后立即释放缓存条目，避免长任务撑爆配额', async () => {
+    const store = new Map<string, ArrayBuffer>();
+    const cache = {
+      match: async (req: Request) => {
+        const hit = store.get(req.url);
+        return hit ? new Response(hit.slice(0)) : undefined;
+      },
+      put: async (req: Request, res: Response) => {
+        store.set(req.url, await res.arrayBuffer());
+      },
+      keys: async () => [...store.keys()].map((u) => new Request(u)),
+      delete: async (req: Request) => store.delete(req.url),
+    };
+    vi.stubGlobal('caches', { open: async () => cache });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('index.m3u8')) return new Response(PLAYLIST, { status: 200 });
+        return new Response(new Uint8Array([0x47]), { status: 200 });
+      })
+    );
+
+    await runDownloadJob(jobOptions());
+
+    expect(store.size).toBe(0);
+  });
+});

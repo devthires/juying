@@ -119,13 +119,14 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
 
       void job
         .then(async () => {
-          await updateEntry(entry.id, { status: 'completed' });
+          await updateEntry(entry.id, { status: 'completed', errorMessage: undefined });
           void clearDownloadChunks(entry.id);
           toast(`《${entry.title}》下载完成`, 'success');
         })
         .catch(async (err: Error) => {
           if (abort.signal.aborted) return; // 用户取消：状态已在取消处理里写好
-          await updateEntry(entry.id, { status: 'error' });
+          // 失败原因落库：toast 一闪而过，任务条目上要能常驻看到原因
+          await updateEntry(entry.id, { status: 'error', errorMessage: err.message });
           toast(`《${entry.title}》下载失败：${err.message}`, 'error');
         })
         .finally(() => {
@@ -311,6 +312,9 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
                   {t.format.toUpperCase()} · {statusLabel[t.status]}
                   {t.status === 'downloading' && t.total > 0 ? ` · ${t.finished}/${t.total} 分片` : ''}
                 </p>
+                {t.status === 'error' && t.errorMessage && (
+                  <p className="text-xs text-danger break-all">{t.errorMessage}</p>
+                )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {t.status === 'downloading' && (

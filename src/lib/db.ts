@@ -66,6 +66,8 @@ export interface DownloadTaskEntry {
   finished: number;
   total: number;
   errorNum: number;
+  /** 失败原因（status=error 时展示在任务条目上，成功后清空） */
+  errorMessage?: string;
   createdAt: number;
   updatedAt: number;
 }

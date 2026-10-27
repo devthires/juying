@@ -207,7 +207,11 @@ async function runStreamingJob(ctx: {
     if (!buffer) return;
     let data: ArrayBuffer = buffer;
     if (aesKey && parsed.aesConf) {
-      data = await decryptSegment(buffer, aesKey, parsed.aesConf.iv, parsed.mediaSequence, i - 1);
+      try {
+        data = await decryptSegment(buffer, aesKey, parsed.aesConf.iv, parsed.mediaSequence, i - 1);
+      } catch {
+        throw new Error(`分片 ${i} 解密失败（源数据损坏），建议更换来源`);
+      }
     }
     if (transmuxer) await transmuxer.pushAndTransmux(new Uint8Array(data));
     else await target.write(new Uint8Array(data));
@@ -353,6 +357,36 @@ export async function runDownloadJob(opts: DownloadJobOptions): Promise<void> {
   }
   if (jobSignal.aborted) return;
 
+  /**
+   * 取出分片明文（写出阶段专用）：优先读缓存。缓存命中但解密失败视为
+   * 分片数据损坏（下载链路无法校验完整性），缓存被驱逐（存储压力下
+   * best-effort 逐出，长任务后段很常见）时同样回源补拉——此前缓存丢失
+   * 直接判死整集，进度已 100% 的任务在最后写出阶段失败，用户体感就是
+   * 「下载完了却显示失败」。
+   */
+  const loadSegmentPlain = async (index: number): Promise<Uint8Array | undefined> => {
+    const attempt = async (raw: ArrayBuffer) => {
+      if (!aesKey || !parsed.aesConf) return new Uint8Array(raw);
+      try {
+        return new Uint8Array(
+          await decryptSegment(raw, aesKey, parsed.aesConf.iv, parsed.mediaSequence, index - 1)
+        );
+      } catch {
+        return undefined; // 坏 padding / 数据损坏
+      }
+    };
+    const cached = await cache.match(new Request(chunkKey(index)));
+    if (cached) {
+      const fromCache = await attempt(await cached.arrayBuffer());
+      if (fromCache) return fromCache;
+    }
+    const buffer = await fetchSegmentWithRetry(parsed.segments[index - 1].url, index, jobSignal);
+    if (!buffer) return undefined; // 任务已中止
+    const fromNet = await attempt(buffer);
+    if (!fromNet) throw new Error(`分片 ${index} 解密失败（源数据损坏），建议更换来源`);
+    return fromNet;
+  };
+
   // —— 顺序写出（转封装 / 拼接） ——
   report(total, total, 'processing');
   if (format === 'MP4') {
@@ -362,26 +396,22 @@ export async function runDownloadJob(opts: DownloadJobOptions): Promise<void> {
     for (let i = 1; i <= total; i++) {
       if (jobSignal.aborted) return;
       await pause.waitIfPaused();
-      const resp = await cache.match(new Request(chunkKey(i)));
-      if (!resp) throw new Error(`分片 ${i} 缓存丢失，请重试`);
-      let data = await resp.arrayBuffer();
-      if (aesKey && parsed.aesConf) {
-        data = await decryptSegment(data, aesKey, parsed.aesConf.iv, parsed.mediaSequence, i - 1);
-      }
+      const data = await loadSegmentPlain(i);
+      if (!data) return;
       await transmuxer.pushAndTransmux(new Uint8Array(data));
+      // 已写出的分片立即释放缓存：整集分片常以 GB 计，继续占配额会触发
+      // 浏览器存储驱逐/写满，反过来杀死后续分片（体感即「下完了却失败」）
+      await cache.delete(new Request(chunkKey(i)));
     }
     await transmuxer.finish();
   } else {
     for (let i = 1; i <= total; i++) {
       if (jobSignal.aborted) return;
       await pause.waitIfPaused();
-      const resp = await cache.match(new Request(chunkKey(i)));
-      if (!resp) throw new Error(`分片 ${i} 缓存丢失，请重试`);
-      let data = await resp.arrayBuffer();
-      if (aesKey && parsed.aesConf) {
-        data = await decryptSegment(data, aesKey, parsed.aesConf.iv, parsed.mediaSequence, i - 1);
-      }
-      await target.write(new Uint8Array(data));
+      const data = await loadSegmentPlain(i);
+      if (!data) return;
+      await target.write(data);
+      await cache.delete(new Request(chunkKey(i)));
     }
     await target.close();
   }
