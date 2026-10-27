@@ -24,7 +24,7 @@
 
 ### 安装包(推荐)
 
-从 [Releases](https://github.com/devthires/juying/releases) 下载 `聚影-安装版-*.exe` 双击安装。
+从 [Releases](https://github.com/devthires/juying/releases) 下载 `JuYing-Setup-*.exe` 双击安装。
 默认访问密码 `123456`,可在 `%APPDATA%\聚影\config.json` 中加入 `{"password": "你的密码"}` 后重启软件修改。
 
 ### 源码运行
