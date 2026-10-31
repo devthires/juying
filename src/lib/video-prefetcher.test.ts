@@ -47,6 +47,14 @@ describe('computeWindow', () => {
 });
 
 describe('VideoPrefetcher.ensure 幂等', () => {
+  beforeEach(() => {
+    // 本组用例按 300s 窗口断言：显式关闭省流模式（默认开启时窗口被封顶到 120s）
+    vi.stubGlobal('localStorage', {
+      getItem: () => JSON.stringify({ dataSaver: false }),
+      setItem: () => {},
+    });
+  });
+
   /** 200 片 × 5s = 1000s：前向余量判定需要窗口明显大于 FORWARD_MARGIN_SECONDS */
   const SEG_COUNT = 200;
   const SEG_BASE = 'https://cdn.example.com/';

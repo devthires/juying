@@ -9,6 +9,8 @@ import { fetchUpstream, getCache, setCache } from './fetch-utils';
 
 const DOUBAN_API = 'https://movie.douban.com/j/search_subjects';
 const CACHE_TTL = 10 * 60 * 1000;
+/** 空结果短缓存：豆瓣偶发限流会返回空列表，按正常 TTL 缓存会让推荐/联想长时间空白 */
+const EMPTY_CACHE_TTL = 30 * 1000;
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
@@ -83,7 +85,7 @@ export async function fetchDoubanRecommend(
     isTv: type === 'tv',
   }));
 
-  setCache(cacheKey, items, CACHE_TTL);
+  setCache(cacheKey, items, items.length > 0 ? CACHE_TTL : EMPTY_CACHE_TTL);
   return items;
 }
 
@@ -123,9 +125,11 @@ export async function fetchDoubanSuggest(wd: string): Promise<DoubanItem[]> {
   } catch {
     // 联想是增强功能，失败静默降级为空列表
   }
+  // 请求失败不缓存：否则一次网络抖动会让该关键词在整个 TTL 内一直无联想
+  if (!raw) return [];
 
   const seen = new Set<string>();
-  const items = (raw ?? [])
+  const items = raw
     .filter((s) => {
       if (!s.title || !s.id || seen.has(s.title)) return false;
       seen.add(s.title);
@@ -139,6 +143,6 @@ export async function fetchDoubanSuggest(wd: string): Promise<DoubanItem[]> {
       year: s.year || undefined,
     }));
 
-  setCache(cacheKey, items, CACHE_TTL);
+  setCache(cacheKey, items, items.length > 0 ? CACHE_TTL : EMPTY_CACHE_TTL);
   return items;
 }
