@@ -10,9 +10,7 @@
     "start": "next start -p 27182",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:api": "vitest run --config vitest.api.config.ts",
-    "test:all": "npm test && npm run test:api"
+    "test": "vitest run"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.0",
