@@ -51,9 +51,10 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
               <Icon name="chevronLeft" className="w-5 h-5" />
             </button>
           )}
-          <Link href="/" aria-label="聚影 首页" className="flex items-center shrink-0">
+          <Link href="/" aria-label="聚影 首页" className="flex items-center gap-2 shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/icons/icon-512.png" alt="聚影" className="w-7 h-7 rounded-lg" />
+            <span className="hidden sm:inline text-sm font-semibold tracking-[0.08em] text-content">聚影</span>
           </Link>
 
           {showSearch && (
@@ -110,6 +111,11 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
           <div className="flex-1 sm:hidden" />
 
           <nav className="flex items-center gap-1 ml-auto">
+            <span className="hidden sm:block">
+              <HeaderLink href="/" active={pathname === '/'}>
+                首页
+              </HeaderLink>
+            </span>
             <HeaderLink href="/live" active={pathname === '/live'}>
               直播
             </HeaderLink>
@@ -141,8 +147,8 @@ function HeaderLink({ href, active, children }: { href: string; active: boolean;
     <Link
       href={href}
       className={cn(
-        'px-2.5 py-1.5 rounded-md text-sm transition-colors',
-        active ? 'text-content bg-hover' : 'text-muted hover:text-content'
+        'px-2.5 py-1.5 rounded-md text-sm transition-colors hover:bg-hover',
+        active ? 'text-content' : 'text-muted hover:text-content'
       )}
     >
       {children}
