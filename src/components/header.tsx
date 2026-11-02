@@ -38,7 +38,7 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
   return (
     <>
       <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-line">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
+        <div className="px-4 sm:px-6 h-14 flex items-center gap-3">
           {/* 桌面 App / 内页没有浏览器后退键，非首页时提供显式返回 */}
           {pathname !== '/' && (
             <button
@@ -54,8 +54,20 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
           <Link href="/" aria-label="聚影 首页" className="flex items-center gap-2 shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/icons/icon-512.png" alt="聚影" className="w-7 h-7 rounded-lg" />
-            <span className="hidden sm:inline text-sm font-semibold tracking-[0.08em] text-content">聚影</span>
+            <span className="hidden sm:inline text-sm font-bold tracking-[0.08em] text-content">聚影</span>
           </Link>
+
+          <nav className="hidden sm:flex items-center gap-1 ml-3">
+            <HeaderLink href="/" active={pathname === '/'}>
+              首页
+            </HeaderLink>
+            <HeaderLink href="/live" active={pathname === '/live'}>
+              直播
+            </HeaderLink>
+            <HeaderLink href="/about" active={pathname === '/about'}>
+              关于
+            </HeaderLink>
+          </nav>
 
           {showSearch && (
             <form
@@ -111,17 +123,6 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
           <div className="flex-1 sm:hidden" />
 
           <nav className="flex items-center gap-1 ml-auto">
-            <span className="hidden sm:block">
-              <HeaderLink href="/" active={pathname === '/'}>
-                首页
-              </HeaderLink>
-            </span>
-            <HeaderLink href="/live" active={pathname === '/live'}>
-              直播
-            </HeaderLink>
-            <HeaderLink href="/about" active={pathname === '/about'}>
-              关于
-            </HeaderLink>
             <ThemeToggle />
             <IconButton label="观看历史" onClick={() => setHistoryOpen(true)}>
               <Icon name="clock" />
@@ -148,7 +149,7 @@ function HeaderLink({ href, active, children }: { href: string; active: boolean;
       href={href}
       className={cn(
         'px-2.5 py-1.5 rounded-md text-sm transition-colors hover:bg-hover',
-        active ? 'text-content' : 'text-muted hover:text-content'
+        active ? 'text-content' : 'text-faint hover:text-content'
       )}
     >
       {children}
@@ -159,7 +160,7 @@ function HeaderLink({ href, active, children }: { href: string; active: boolean;
 function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
-      className="p-2 rounded-md text-muted hover:text-content hover:bg-hover transition-colors"
+      className="p-2 rounded-md text-faint hover:text-content hover:bg-hover transition-colors"
       title={label}
       aria-label={label}
       onClick={onClick}
