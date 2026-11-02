@@ -17,6 +17,8 @@ const PlayerShell = dynamic(() => import('@/components/player-shell').then((m) =
 });
 import { EmptyState, LoadingState, Spinner } from '@/components/states';
 import { SwitchSourceModal } from '@/components/switch-source';
+import { DoubanCard } from '@/components/video-card';
+import { SmartImage } from '@/components/smart-image';
 import { SkipMarkPanel } from '@/components/skip-mark-panel';
 import { skipMarkKey, validateSegment, type SkipSegment } from '@/lib/skip-marks';
 import type { PlayerSkipApi } from '@/components/player-shell';
@@ -25,7 +27,7 @@ import { enqueueDownload } from '@/components/download-manager';
 import { Icon } from '@/components/icon';
 import { useAuth } from '@/components/auth';
 import { resolveSource, useAppStore } from '@/lib/store';
-import { qualityKey } from '@/lib/quality';
+import { qualityKey, qualityLabel } from '@/lib/quality';
 import {
   clearProgress,
   progressKeyOf,
@@ -113,7 +115,31 @@ function WatchContent() {
   });
 
   const episodes = useMemo(() => detailQuery.data?.episodes ?? [], [detailQuery.data]);
-  const videoTitle = titleParam || detailQuery.data?.videoInfo?.title || '未知视频';
+  const videoInfo = detailQuery.data?.videoInfo;
+  const videoTitle = titleParam || videoInfo?.title || '未知视频';
+
+  const detailDesc = useMemo(() => plainText(videoInfo?.desc), [videoInfo?.desc]);
+  const metaParts = useMemo(
+    () => [videoInfo?.typeName, videoInfo?.year, videoInfo?.area, videoInfo?.remarks].filter((v): v is string => Boolean(v)),
+    [videoInfo]
+  );
+  const relatedType: 'movie' | 'tv' = /剧|TV|动画|综艺|纪录/i.test(videoInfo?.typeName || '') ? 'tv' : 'movie';
+  const relatedQuery = useQuery({
+    queryKey: ['watch-related', relatedType],
+    queryFn: ({ signal }) => api.douban(relatedType, '热门', 0, 12, signal),
+    enabled: verified && Boolean(videoInfo),
+    staleTime: 10 * 60_000,
+  });
+  const relatedItems = useMemo(
+    () => (relatedQuery.data?.items ?? []).filter((item) => item.title !== videoTitle).slice(0, 6),
+    [relatedQuery.data, videoTitle]
+  );
+
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [coverFailed, setCoverFailed] = useState(false);
+  const [qualityHeight, setQualityHeight] = useState<number | undefined>(undefined);
+  useEffect(() => setDescExpanded(false), [videoInfo?.desc]);
+  useEffect(() => setCoverFailed(false), [videoInfo?.cover]);
 
   // 当前播放地址：优先取剧集列表中的当前集，其次直连 URL 参数
   const currentUrl = useMemo(() => {
@@ -128,6 +154,8 @@ function WatchContent() {
     if (episodes.length > 0) return Math.min(Math.max(indexParam, 0), episodes.length - 1);
     return indexParam;
   }, [episodes, indexParam]);
+
+  useEffect(() => setQualityHeight(undefined), [sourceKey, vodId, currentIndex]);
 
   // 跳过片段按剧名记忆：换集不变，换源到同名资源也能命中。
   // 标题缺失（直连链接）时退回 source:vodId，至少保证本源本片可用。
@@ -339,6 +367,7 @@ function WatchContent() {
                   onPrevEpisode={() => goEpisode(currentIndex - 1)}
                   onNextEpisode={() => goEpisode(currentIndex + 1)}
                   onQuality={(height) => {
+                    setQualityHeight(height);
                     // 播放实测是最权威的画质来源，回写后搜索列表里该「源 + 影片」直接显示
                     if (!sourceKey || !vodId) return;
                     useAppStore.getState().setQuality({
@@ -468,6 +497,101 @@ function WatchContent() {
             </p>
           </aside>
         </div>
+
+        {videoInfo ? (
+          <section className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]" aria-label="影片信息">
+            <div className="rounded-lg border border-line bg-surface-raised p-4">
+              <div className="flex gap-4">
+                <div className="relative w-[92px] shrink-0 overflow-hidden rounded-lg border border-line bg-chip aspect-[2/3] sm:w-[110px]">
+                  {videoInfo.cover && !coverFailed ? (
+                    <SmartImage
+                      url={videoInfo.cover}
+                      mode={store.imageProxyMode}
+                      customProxy={store.customImageProxy}
+                      alt={videoTitle}
+                      className="h-full w-full object-cover"
+                      onExhausted={() => setCoverFailed(true)}
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-gradient-to-br from-accent/25 via-chip to-pink-500/15" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-lg font-semibold text-content">{videoTitle}</h2>
+                  <div className="mt-1 text-xs text-faint">{metaParts.join(' · ') || '影片信息'}</div>
+                  <p className={cn('mt-3 text-sm leading-relaxed text-muted', !descExpanded && 'line-clamp-3')}>
+                    {detailDesc || '暂无简介'}
+                  </p>
+                  {detailDesc.length > 120 && (
+                    <button
+                      className="mt-1 text-xs text-accent transition-colors hover:text-accent-hover"
+                      onClick={() => setDescExpanded((v) => !v)}
+                    >
+                      {descExpanded ? '收起' : '展开'}
+                    </button>
+                  )}
+                  <div className="mt-3 space-y-1 text-xs text-faint">
+                    {videoInfo.director && <div>导演：{videoInfo.director}</div>}
+                    {videoInfo.actor && <div className="line-clamp-2">主演：{videoInfo.actor}</div>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-line bg-surface-raised p-4">
+              <h2 className="mb-3 text-sm font-semibold text-content">播放信息</h2>
+              <dl className="space-y-2 text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-faint">当前来源</dt>
+                  <dd className="truncate text-content">{source.name}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-faint">集数</dt>
+                  <dd className="text-content">
+                    {episodes.length > 0 ? `${currentIndex + 1} / ${episodes.length}` : '—'}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-faint">清晰度</dt>
+                  <dd className="text-content">{qualityLabel(qualityHeight) ?? '播放后测速'}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-faint">自动连播</dt>
+                  <dd className="text-content">{store.autoplayNext ? '开启' : '关闭'}</dd>
+                </div>
+              </dl>
+              <button className="btn-ghost btn-sm mt-4 w-full" onClick={() => setSwitchOpen(true)}>
+                切换资源
+              </button>
+            </div>
+          </section>
+        ) : detailQuery.isLoading ? (
+          <section className="mt-4 rounded-lg border border-line bg-surface-raised p-4" aria-label="影片信息">
+            <DetailSkeleton />
+          </section>
+        ) : null}
+
+        {(relatedQuery.isLoading || relatedItems.length > 0) && (
+          <section className="mt-6" aria-label="相关推荐">
+            <div className="mb-3 flex items-baseline justify-between gap-2">
+              <h2 className="text-lg font-semibold text-content">相关推荐</h2>
+              <span className="text-xs text-faint">来自豆瓣热门</span>
+            </div>
+            {relatedQuery.isLoading ? (
+              <RelatedSkeleton />
+            ) : (
+              <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-6">
+                {relatedItems.map((item) => (
+                  <DoubanCard
+                    key={item.id}
+                    item={item}
+                    onClick={() => router.push(`/?s=${encodeURIComponent(item.title)}`)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </main>
 
       {switchOpen && (
@@ -499,6 +623,47 @@ function EpisodeButton({ index, active, onClick }: { index: number; active: bool
     >
       {index + 1}
     </button>
+  );
+}
+
+/** 详情接口的简介偶尔带 HTML，这里只取纯文本用于展示，避免把标签直接渲染出来 */
+function plainText(value?: string): string {
+  return (value || '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function DetailSkeleton() {
+  return (
+    <div className="flex animate-pulse gap-4">
+      <div className="aspect-[2/3] w-[92px] shrink-0 rounded-lg bg-chip sm:w-[110px]" />
+      <div className="flex-1 space-y-2">
+        <div className="h-5 w-1/3 rounded bg-chip" />
+        <div className="h-3 w-1/2 rounded bg-chip" />
+        <div className="h-3 w-full rounded bg-chip" />
+        <div className="h-3 w-5/6 rounded bg-chip" />
+        <div className="h-3 w-2/3 rounded bg-chip" />
+      </div>
+    </div>
+  );
+}
+
+function RelatedSkeleton() {
+  return (
+    <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-6">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div key={index} className="animate-pulse">
+          <div className="aspect-[2/3] rounded-lg bg-chip" />
+          <div className="mt-2 h-3 w-2/3 rounded bg-chip" />
+        </div>
+      ))}
+    </div>
   );
 }
 

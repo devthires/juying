@@ -14,3 +14,5 @@ vitest-results.json
 generated-images/
 # desktop server bundle (build artifact)
 desktop/server-bundle/
+# electron-builder 备用输出目录（安装包保留在本机，不入库）
+desktop/out2/

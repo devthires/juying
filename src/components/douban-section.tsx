@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/client-api';
 import { useAppStore } from '@/lib/store';
@@ -13,14 +13,21 @@ const TV_TAGS = ['热门', '美剧', '英剧', '韩剧', '日剧', '国产剧', 
 const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
 /** 首页推荐区：数据源由设置决定（豆瓣热门 / Bangumi 新番放送 / 影视热榜），二选一展示 */
-export function RecommendSection({ onPick }: { onPick: (title: string) => void }) {
+export function RecommendSection({
+  onPick,
+  onItems,
+}: {
+  onPick: (title: string) => void;
+  /** 把当前推荐数据回传给首页，供 Hero 精选位和热播榜复用，避免重复请求 */
+  onItems?: (items: DoubanItem[]) => void;
+}) {
   const doubanEnabled = useAppStore((s) => s.doubanEnabled);
   const recommendSource = useAppStore((s) => s.recommendSource);
 
   if (!doubanEnabled) return null;
-  if (recommendSource === 'bangumi') return <BangumiView onPick={onPick} />;
-  if (recommendSource === 'hot-list') return <HotListView onPick={onPick} />;
-  return <DoubanView onPick={onPick} />;
+  if (recommendSource === 'bangumi') return <BangumiView onPick={onPick} onItems={onItems} />;
+  if (recommendSource === 'hot-list') return <HotListView onPick={onPick} onItems={onItems} />;
+  return <DoubanView onPick={onPick} onItems={onItems} />;
 }
 
 /**
@@ -28,7 +35,7 @@ export function RecommendSection({ onPick }: { onPick: (title: string) => void }
  * 一次性渲染全部条目：数据本就一次拉全（50 条），卡片图片又是 lazy 加载，
  * 视口外的图不会请求，因此不需要「加载更多」这类本地切片分页来打断浏览。
  */
-function DoubanView({ onPick }: { onPick: (title: string) => void }) {
+function DoubanView({ onPick, onItems }: { onPick: (title: string) => void; onItems?: (items: DoubanItem[]) => void }) {
   const [type, setType] = useState<'movie' | 'tv'>('movie');
   const [tag, setTag] = useState('热门');
 
@@ -38,7 +45,10 @@ function DoubanView({ onPick }: { onPick: (title: string) => void }) {
   });
 
   const tags = type === 'movie' ? MOVIE_TAGS : TV_TAGS;
-  const items = query.data?.items ?? [];
+  const items = useMemo(() => query.data?.items ?? [], [query.data]);
+  useEffect(() => {
+    onItems?.(items);
+  }, [items, onItems]);
 
   const switchType = (t: 'movie' | 'tv') => {
     if (t === type) return;
@@ -83,7 +93,7 @@ function DoubanView({ onPick }: { onPick: (title: string) => void }) {
       ) : items.length === 0 ? (
         <p className="text-center text-sm text-faint py-8">该分类暂无推荐内容</p>
       ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2.5">
           {items.map((item) => (
             <DoubanCard key={item.id} item={item} onClick={() => onPick(item.title)} />
           ))}
@@ -94,7 +104,7 @@ function DoubanView({ onPick }: { onPick: (title: string) => void }) {
 }
 
 /** Bangumi 每日放送：星期筛选，一次拉全量无分页 */
-function BangumiView({ onPick }: { onPick: (title: string) => void }) {
+function BangumiView({ onPick, onItems }: { onPick: (title: string) => void; onItems?: (items: DoubanItem[]) => void }) {
   const [weekday, setWeekday] = useState<number | 'all'>('all');
 
   const query = useQuery({
@@ -102,12 +112,15 @@ function BangumiView({ onPick }: { onPick: (title: string) => void }) {
     queryFn: ({ signal }) => api.bangumiCalendar(signal),
   });
 
-  let items: DoubanItem[] = [];
-  if (query.data) {
-    items = weekday === 'all'
+  const items = useMemo(() => {
+    if (!query.data) return [];
+    return weekday === 'all'
       ? query.data.days.flatMap((d) => d.items)
       : (query.data.days.find((d) => d.weekday === weekday)?.items ?? []);
-  }
+  }, [query.data, weekday]);
+  useEffect(() => {
+    onItems?.(items);
+  }, [items, onItems]);
 
   return (
     <section aria-label="新番放送推荐">
@@ -127,7 +140,7 @@ function BangumiView({ onPick }: { onPick: (title: string) => void }) {
       ) : query.isLoading ? (
         <GridSkeleton />
       ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2.5">
           {items.map((item) => (
             <DoubanCard key={item.id} item={item} onClick={() => onPick(item.title)} />
           ))}
@@ -147,7 +160,7 @@ const HOT_LISTS = [
 ];
 
 /** 影视热榜（60s API）：豆瓣五个周榜 + 百度热播剧，chips 切换 */
-function HotListView({ onPick }: { onPick: (title: string) => void }) {
+function HotListView({ onPick, onItems }: { onPick: (title: string) => void; onItems?: (items: DoubanItem[]) => void }) {
   const [listId, setListId] = useState(HOT_LISTS[0].id);
 
   const query = useQuery({
@@ -155,7 +168,10 @@ function HotListView({ onPick }: { onPick: (title: string) => void }) {
     queryFn: ({ signal }) => api.hotList(listId, signal),
   });
 
-  const items = query.data?.items ?? [];
+  const items = useMemo(() => query.data?.items ?? [], [query.data]);
+  useEffect(() => {
+    onItems?.(items);
+  }, [items, onItems]);
 
   return (
     <section aria-label="影视榜单推荐">
@@ -172,7 +188,7 @@ function HotListView({ onPick }: { onPick: (title: string) => void }) {
       ) : query.isLoading ? (
         <GridSkeleton />
       ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2.5">
           {items.map((item) => (
             <DoubanCard key={item.id} item={item} onClick={() => onPick(item.title)} />
           ))}
@@ -184,7 +200,7 @@ function HotListView({ onPick }: { onPick: (title: string) => void }) {
 
 function GridSkeleton() {
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2.5">
       {Array.from({ length: 16 }).map((_, i) => (
         <div key={i}>
           <div className="aspect-[2/3] rounded-lg bg-chip animate-pulse" />
