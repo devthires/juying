@@ -38,6 +38,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, ms, error: `HTTP ${res.status}` });
     }
     const data = await res.json();
+    // 先识别 TVBox 配置：这类 JSON 有 sites/lives/spider，不是点播接口。
+    // 之前直接 parseSearchList 会得到空数组并返回 ok，造成「绿色但永远搜不到」。
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      const record = data as Record<string, unknown>;
+      if (Array.isArray(record.sites) || Array.isArray(record.lives) || typeof record.spider === 'string') {
+        return NextResponse.json({ ok: false, ms, error: 'TVBox 配置，请走数据源订阅' });
+      }
+      // 苹果 CMS 的搜索响应应有 list 字段；没有 list 说明不是点播接口
+      if (!Object.prototype.hasOwnProperty.call(record, 'list')) {
+        return NextResponse.json({ ok: false, ms, error: '不是苹果CMS接口（缺少 list）' });
+      }
+    }
     const list = parseSearchList(data, { key: 'test', name: 'test', url });
     return NextResponse.json({ ok: true, ms, count: list.length });
   } catch (err) {

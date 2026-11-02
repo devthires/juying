@@ -507,7 +507,7 @@ function VodSourceRow({
           state={testState}
           onTest={onTest}
           title="测试可用性（搜索耗时与结果量）"
-          badgeWhenOk={({ ms }) => `✓ ${ms}ms`}
+          badgeWhenOk={({ ms, count }) => (count === 0 ? `✓ ${ms}ms · 0条` : `✓ ${ms}ms`)}
         />
         {!isEnv &&
           (fromSubscription ? (
@@ -1320,6 +1320,11 @@ function SourceForm({
       toast('API 链接需以 http:// 或 https:// 开头', 'warning');
       return;
     }
+    // 常见误操作：把 TVBox/源列表 JSON 当点播接口添加，测活会显示绿色但永远搜不到
+    if (/\.json(?:$|[?#])/i.test(u)) {
+      toast('这是 JSON 配置地址，请到「数据源订阅」导入；点播源请填苹果CMS接口', 'warning');
+      return;
+    }
     onSubmit({ name: n, url: u, detail: detail.trim() || undefined, isAdult });
   };
 
@@ -1339,6 +1344,9 @@ function SourceForm({
       value={url}
       onChange={(e) => setUrl(e.target.value)}
     />
+    <p className="text-[11px] text-faint leading-relaxed">
+      点播源只支持苹果 CMS 接口（通常以 /api.php/provide/vod 结尾）；TVBox / JSON 配置请到「数据源订阅」导入。4K 取决于源实际返回的 m3u8 分辨率。
+    </p>
     <input
       className="input w-full"
       aria-label="详情页地址（可选）"

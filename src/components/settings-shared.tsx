@@ -190,15 +190,20 @@ export function TestBadge({
   title: string;
   badgeWhenOk: (t: { ms?: number; count?: number }) => string;
 }) {
+  const empty = state?.status === 'done' && state.ok && state.count === 0;
   return (
     <span className="flex items-center gap-1 shrink-0">
       {state?.status === 'done' && (
         <span
           className={cn(
             'text-[10px] px-1.5 py-0.5 rounded',
-            state.ok ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'
+            state.ok
+              ? empty
+                ? 'bg-warning/15 text-warning'
+                : 'bg-success/15 text-success'
+              : 'bg-danger/15 text-danger'
           )}
-          title={state.ok ? `${state.ms}ms` : state.error}
+          title={state.ok ? (empty ? '接口可用，但没有返回结果' : `${state.ms}ms`) : state.error}
         >
           {state.ok ? badgeWhenOk({ ms: state.ms, count: state.count }) : `✗ ${state.error?.slice(0, 12) || '失败'}`}
         </span>
